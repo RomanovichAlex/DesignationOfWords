@@ -4,6 +4,8 @@ import android.os.Bundle
 import android.view.View.GONE
 import android.view.View.VISIBLE
 import android.widget.Toast
+import androidx.lifecycle.Observer
+import androidx.lifecycle.ViewModelProvider
 import androidx.recyclerview.widget.LinearLayoutManager
 import by.romanovich.designationOfWords.data.DataModel
 import by.romanovich.designationOfWords.R
@@ -13,8 +15,17 @@ import by.romanovich.designationOfWords.presenter.Presenter
 import by.romanovich.designationOfWords.ui.base.BaseActivity
 import by.romanovich.designationOfWords.ui.base.View
 import by.romanovich.designationOfWords.ui.main.adapter.MainAdapter
+import by.romanovich.designationOfWords.viewModel.BaseViewModel
 
+// Контракта уже нет
 class MainActivity : BaseActivity<AppState>() {
+// Создаём модель
+    override val model: MainViewModel by lazy {
+        ViewModelProvider.NewInstanceFactory().create(MainViewModel::class.java)
+    }
+    // Паттерн Observer в действии. Именно с его помощью мы подписываемся на
+// изменения в LiveData
+    private val observer = Observer<AppState> { renderData(it) }
     private lateinit var binding: ActivityMainBinding
     private var adapter: MainAdapter? = null
     private val onListItemClickListener: MainAdapter.OnListItemClickListener =
@@ -24,9 +35,6 @@ class MainActivity : BaseActivity<AppState>() {
                     Toast.LENGTH_SHORT).show()
             }
         }
-    override fun createPresenter(): Presenter<AppState, View> {
-        return MainPresenterImpl()
-    }
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         binding = ActivityMainBinding.inflate(layoutInflater)
@@ -34,17 +42,44 @@ class MainActivity : BaseActivity<AppState>() {
         binding.searchFab.setOnClickListener {
             val searchDialogFragment = SearchDialogFragment.newInstance()
             searchDialogFragment.setOnSearchClickListener(object :
-
                 SearchDialogFragment.OnSearchClickListener {
                 override fun onClick(searchWord: String) {
-                    presenter.getData(searchWord, true)
+// Обратите внимание на этот ключевой момент. У ViewModel
+// мы получаем LiveData через метод getData и подписываемся
+// на изменения, передавая туда observer
+                    model.getData(searchWord, true).observe(this@MainActivity,
+                        observer)
                 }
             })
             searchDialogFragment.show(supportFragmentManager,
-                BOTTOM_SHEET_FRAGMENT_DIALOG_TAG
-            )
+                BOTTOM_SHEET_FRAGMENT_DIALOG_TAG)
         }
     }
+// Удаляем ненужные вспомогательные методы типа createPresenter. Всё остальное - без изменений, за исключением одной детали:
+    private fun showErrorScreen(error: String?) {
+    showViewError()
+    binding.errorTextview.text = error ?: getString(R.string.undefined_error)
+    binding.reloadButton.setOnClickListener {
+// В случае ошибки мы повторно запрашиваем данные и подписываемся
+// на изменения
+        model.getData("hi", true).observe(this, observer)
+    }
+}
+   /* private fun showErrorScreen(error: String?) {
+        showViewError()
+        binding.errorTextview.text = error ?: getString(R.string.undefined_error)
+        binding.reloadButton.setOnClickListener {
+            presenter.getData("hi", true)
+        }
+    }*/
+
+    /*override fun createPresenter(): Presenter<AppState, View> {
+        return MainPresenterImpl()
+    }*/
+
+
+
+
     override fun renderData(appState: AppState) {
         when (appState) {
             is AppState.Success -> {
@@ -77,13 +112,7 @@ class MainActivity : BaseActivity<AppState>() {
             }
         }
     }
-    private fun showErrorScreen(error: String?) {
-        showViewError()
-        binding.errorTextview.text = error ?: getString(R.string.undefined_error)
-        binding.reloadButton.setOnClickListener {
-            presenter.getData("hi", true)
-        }
-    }
+
     private fun showViewSuccess() {
         binding.successLinearLayout.visibility = VISIBLE
         binding.loadingFrameLayout.visibility = GONE
@@ -102,4 +131,5 @@ class MainActivity : BaseActivity<AppState>() {
     companion object {
         private const val BOTTOM_SHEET_FRAGMENT_DIALOG_TAG = "74a54328-5d62-46bf-ab6b-cbf5fgt0-092395"
     }
+
 }
